@@ -25,7 +25,7 @@ func init() {
 var (
 	fs           = flag.NewFlagSet("", flag.ExitOnError)
 	domainFlag   = fs.String("domain", "", "external dns name")
-	acmeFlag     = fs.String("acme", ":80", "listen interface for ACME challenge; must be reachable at port 80 from internet")
+	acmeFlag     = fs.String("acme", ":80", "listen interface for ACME challenge\nmust be reachable at port 80 from internet")
 	tlsProxyFlag = fs.String("tlsproxy", "", "comma separated external=internal listen addresses")
 	stagingFlag  = fs.Bool("staging", false, "use LetsEncrypt staging server")
 	pprofFlag    = fs.String("pprof", "", "listen address of pprof server")
