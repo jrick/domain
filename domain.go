@@ -132,6 +132,7 @@ func setupTLS(domain string) (tc *tls.Config) {
 	}
 	tc = m.TLSConfig()
 	tc.ServerName = domain
+	tc.NextProtos = []string{"http/1.1", acme.ALPNProto}
 	tc.MinVersion = tls.VersionTLS12
 	tc.CurvePreferences = []tls.CurveID{tls.X25519, tls.CurveP256}
 	tc.PreferServerCipherSuites = true
