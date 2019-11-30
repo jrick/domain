@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -22,22 +23,56 @@ func init() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 }
 
-var (
-	fs           = flag.NewFlagSet("", flag.ExitOnError)
-	domainFlag   = fs.String("domain", "", "external dns name")
-	acmeFlag     = fs.String("acme", ":80", "listen interface for ACME challenge\nmust be reachable at port 80 from internet")
-	tlsProxyFlag = fs.String("tlsproxy", "", "comma separated external=internal listen addresses")
-	stagingFlag  = fs.Bool("staging", false, "use LetsEncrypt staging server")
-	pprofFlag    = fs.String("pprof", "", "listen address of pprof server")
-)
+var flags struct {
+	domain   string
+	acme     string
+	tlsProxy string
+	staging  bool
+	cache    string
+	pprof    string
+}
+
+func parseFlags() {
+	args := os.Args[1:]
+	if len(args) >= 1 && !strings.HasPrefix(args[0], "-") {
+		flags.domain = args[0]
+		args = args[1:]
+	}
+	var noDomain bool
+	if flags.domain == "" {
+		flags.domain = "example.com"
+		noDomain = true
+	}
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = "."
+	}
+	fs := flag.NewFlagSet("", flag.ExitOnError)
+	fs.StringVar(&flags.acme, "acme", ":80", "listen interface for ACME challenge\n"+
+		"must be reachable at port 80 from internet")
+	fs.StringVar(&flags.tlsProxy, "tlsproxy", "", "comma separated external=internal listen addresses")
+	fs.BoolVar(&flags.staging, "staging", false, "use LetsEncrypt staging server")
+	fs.StringVar(&flags.cache, "cache", filepath.Join(home, flags.domain), "directory for certificate cache")
+	fs.StringVar(&flags.pprof, "pprof", "", "listen address of pprof server")
+	fs.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s example.com [flags]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Flags:\n")
+		fs.PrintDefaults()
+		os.Exit(2)
+	}
+	fs.Parse(args)
+	if noDomain {
+		fs.Usage()
+	}
+}
 
 func main() {
-	fs.Parse(os.Args[1:])
+	parseFlags()
 
-	log.Printf("Starting domain proxy for %v", *domainFlag)
+	log.Printf("Starting domain proxy for %v", flags.domain)
 	log.Printf("Go version %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
-	if *pprofFlag != "" {
+	if flags.pprof != "" {
 		mux := http.NewServeMux()
 		mux.Handle("/", http.RedirectHandler("/debug/pprof/", http.StatusSeeOther))
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -45,7 +80,7 @@ func main() {
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		lis, err := net.Listen("tcp", *pprofFlag)
+		lis, err := net.Listen("tcp", flags.pprof)
 		if err != nil {
 			log.Panic(err)
 		}
@@ -54,8 +89,8 @@ func main() {
 		go func() { log.Println(s.Serve(lis)) }()
 	}
 
-	tc := setupTLS(*domainFlag)
-	for _, pair := range strings.Split(*tlsProxyFlag, ",") {
+	tc := setupTLS(flags.domain)
+	for _, pair := range strings.Split(flags.tlsProxy, ",") {
 		pos := strings.Index(pair, "=")
 		switch pos {
 		case -1, 0, len(pair) - 1:
@@ -117,16 +152,12 @@ func proxyTLS(extConn net.Conn, intAddr string) {
 const letsEncryptStagingURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 func setupTLS(domain string) (tc *tls.Config) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("no home directory for cert cache: %v", err)
-	}
 	m := &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache(filepath.Join(home, ".domain")),
+		Cache:      autocert.DirCache(flags.cache),
 		HostPolicy: autocert.HostWhitelist(domain),
 	}
-	if *stagingFlag {
+	if flags.staging {
 		log.Printf("using LetsEncrypt staging environment")
 		m.Client = &acme.Client{DirectoryURL: letsEncryptStagingURL}
 	}
@@ -144,7 +175,7 @@ func setupTLS(domain string) (tc *tls.Config) {
 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	}
-	lis, err := net.Listen("tcp", *acmeFlag)
+	lis, err := net.Listen("tcp", flags.acme)
 	if err != nil {
 		log.Fatal(err)
 	}
