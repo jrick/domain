@@ -42,7 +42,6 @@ var (
 func main() {
 	fs.Parse(os.Args[1:])
 
-
 	if *crtDirFlag != "" {
 		crtDir = *crtDirFlag
 	}
