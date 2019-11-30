@@ -69,6 +69,9 @@ func parseFlags() {
 func main() {
 	parseFlags()
 
+	unveil(flags.cache, "rwc")
+	unveilBlock()
+
 	log.Printf("Starting domain proxy for %v", flags.domain)
 	log.Printf("Go version %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
