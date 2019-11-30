@@ -16,23 +16,39 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sys/unix"
 )
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("no home directory for cert cache: %v", err)
+	}
+	crtDir = home
 }
 
 var (
+	crtDir       string
 	fs           = flag.NewFlagSet("", flag.ExitOnError)
 	domainFlag   = fs.String("domain", "", "external dns name")
 	acmeFlag     = fs.String("acme", ":80", "listen interface for ACME challenge\nmust be reachable at port 80 from internet")
 	tlsProxyFlag = fs.String("tlsproxy", "", "comma separated external=internal listen addresses")
 	stagingFlag  = fs.Bool("staging", false, "use LetsEncrypt staging server")
+	crtDirFlag   = fs.String("crtdir", crtDir, "directory to store certificate cache in")
 	pprofFlag    = fs.String("pprof", "", "listen address of pprof server")
 )
 
 func main() {
 	fs.Parse(os.Args[1:])
+
+
+	if *crtDirFlag != "" {
+		crtDir = *crtDirFlag
+	}
+
+	unix.Unveil(crtDir, "rwc")
+	unix.UnveilBlock()
 
 	log.Printf("Starting domain proxy for %v", *domainFlag)
 	log.Printf("Go version %s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH)
@@ -117,13 +133,10 @@ func proxyTLS(extConn net.Conn, intAddr string) {
 const letsEncryptStagingURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
 
 func setupTLS(domain string) (tc *tls.Config) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("no home directory for cert cache: %v", err)
-	}
+
 	m := &autocert.Manager{
 		Prompt:     autocert.AcceptTOS,
-		Cache:      autocert.DirCache(filepath.Join(home, ".domain")),
+		Cache:      autocert.DirCache(filepath.Join(crtDir, ".domain")),
 		HostPolicy: autocert.HostWhitelist(domain),
 	}
 	if *stagingFlag {
