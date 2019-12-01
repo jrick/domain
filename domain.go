@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,7 +17,6 @@ import (
 
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
-	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -119,6 +119,8 @@ func main() {
 	select {}
 }
 
+var errClosed = errors.New("closed")
+
 func proxyTLS(extConn net.Conn, intAddr string) {
 	defer extConn.Close()
 	err := extConn.(*tls.Conn).Handshake()
@@ -134,22 +136,24 @@ func proxyTLS(extConn net.Conn, intAddr string) {
 	defer intConn.Close()
 	log.Printf("proxying %v->%v", extConn.RemoteAddr(), intConn.RemoteAddr())
 	var recv, sent int64
-	halfProxy := func(to, from net.Conn, copied *int64) func() error {
-		return func() error {
-			n, err := io.CopyBuffer(to, from, nil)
-			*copied = n
-			return err
+	errs := make(chan error, 2)
+	halfProxy := func(to, from net.Conn, copied *int64) {
+		n, err := io.Copy(to, from)
+		*copied = n
+		select {
+		case errs <- err:
+		default:
 		}
+		to.Close()
 	}
-	var g errgroup.Group
-	g.Go(halfProxy(intConn, extConn, &recv))
-	g.Go(halfProxy(extConn, intConn, &sent))
-	err = g.Wait()
-	if err != nil {
-		log.Printf("%v (recv=%v sent=%v): %v", extConn.RemoteAddr(), recv, sent, err)
-	} else {
-		log.Printf("%v (recv=%v sent=%v): closed", extConn.RemoteAddr(), recv, sent)
+	go halfProxy(intConn, extConn, &recv)
+	go halfProxy(extConn, intConn, &sent)
+	err = <-errs // Read first error
+	_ = <-errs   // Discard second but wait for copy to complete
+	if err == nil {
+		err = errClosed
 	}
+	log.Printf("%v->%v (recv=%v sent=%v): %v", extConn.RemoteAddr(), intConn.RemoteAddr(), recv, sent, err)
 }
 
 const letsEncryptStagingURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
