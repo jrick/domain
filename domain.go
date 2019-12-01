@@ -140,10 +140,7 @@ func proxyTLS(extConn net.Conn, intAddr string) {
 	halfProxy := func(to, from net.Conn, copied *int64) {
 		n, err := io.Copy(to, from)
 		*copied = n
-		select {
-		case errs <- err:
-		default:
-		}
+		errs <- err
 		to.Close()
 	}
 	go halfProxy(intConn, extConn, &recv)
