@@ -69,6 +69,10 @@ func parseFlags() {
 func main() {
 	parseFlags()
 
+	err := os.MkdirAll(flags.cache, 0700)
+	if err != nil {
+		log.Fatal(err)
+	}
 	unveil(flags.cache, "rwc")
 	unveilBlock()
 
