@@ -73,6 +73,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	unveil("/etc/resolv.conf", "r")
+	unveil("/etc/ssl", "r")
 	unveil(flags.cache, "rwc")
 	unveilBlock()
 
