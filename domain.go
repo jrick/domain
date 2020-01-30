@@ -74,7 +74,7 @@ func main() {
 		log.Fatal(err)
 	}
 	unveil("/etc/resolv.conf", "r")
-	unveil("/etc/ssl", "r")
+	unveil("/etc/ssl/cert.pem", "r")
 	unveil(flags.cache, "rwc")
 	unveilBlock()
 
