@@ -27,6 +27,7 @@ var flags struct {
 	domain   string
 	acme     string
 	tlsProxy string
+	minTLS13 bool
 	staging  bool
 	cache    string
 	pprof    string
@@ -51,6 +52,7 @@ func parseFlags() {
 	fs.StringVar(&flags.acme, "acme", ":80", "listen interface for ACME challenge\n"+
 		"must be reachable at port 80 from internet")
 	fs.StringVar(&flags.tlsProxy, "tlsproxy", "", "comma separated external=internal listen addresses")
+	fs.BoolVar(&flags.minTLS13, "mintls1.3", false, "require minimum TLS 1.3")
 	fs.BoolVar(&flags.staging, "staging", false, "use LetsEncrypt staging server")
 	fs.StringVar(&flags.cache, "cache", filepath.Join(home, flags.domain), "directory for certificate cache")
 	fs.StringVar(&flags.pprof, "pprof", "", "listen address of pprof server")
@@ -175,6 +177,10 @@ func setupTLS(domain string) (tc *tls.Config) {
 	tc.ServerName = domain
 	tc.NextProtos = []string{"http/1.1", acme.ALPNProto}
 	tc.MinVersion = tls.VersionTLS12
+	switch {
+	case flags.minTLS13:
+		tc.MinVersion = tls.VersionTLS13
+	}
 	tc.CurvePreferences = []tls.CurveID{tls.X25519, tls.CurveP256}
 	tc.PreferServerCipherSuites = true
 	tc.CipherSuites = []uint16{ // Only applies to TLS 1.2. TLS 1.3 ciphersuites are not configurable.
