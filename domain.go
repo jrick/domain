@@ -51,7 +51,7 @@ func parseFlags() {
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	fs.StringVar(&flags.acme, "acme", ":80", "listen interface for ACME challenge\n"+
 		"must be reachable at port 80 from internet")
-	fs.StringVar(&flags.tlsProxy, "tlsproxy", "", "comma separated external=internal listen addresses")
+	fs.StringVar(&flags.tlsProxy, "tlsproxy", "", "comma separated list of externalIP:port=internalIP:port")
 	fs.BoolVar(&flags.minTLS13, "mintls1.3", false, "require minimum TLS 1.3")
 	fs.BoolVar(&flags.staging, "staging", false, "use LetsEncrypt staging server")
 	fs.StringVar(&flags.cache, "cache", filepath.Join(home, flags.domain), "directory for certificate cache")
